@@ -1,0 +1,71 @@
+#!/bin/bash
+# git precommit hook for php-cs-fixer 
+#
+# @author Mehmet Ali Ergut <mim@taximact.com>
+# @date 2015-11-11 13:23:04
+ 
+# Script needs php-cs-fixer, so you need to install it before using it.
+# Ex: brew install php-cs-fixer
+
+PHPFIXER_BIN=$(type -p "php-cs-fixer")
+PHPFIXER_VENDOR=./vendor/bin/php-cs-fixer
+PHPFIXER_LEVEL_DEFAULT=psr2
+
+
+if [ -f $PHPCS_BIN ]; then
+  PHPFIXER_EXECUTABLE=$PHPFIXER_BIN
+elif [ -f $PHPCS_VENDOR  ]; then
+  PHPFIXER_EXECUTABLE=$PHPFIXER_VENDOR
+else 
+  echo "Can not find php-cs-fixer executable. Please install before run"
+  exit 0
+fi
+
+# default config file name in project
+PHPFIXER_CONFIG_FILE=".php_cs"
+if [ -f $PHPFIXER_CONFIG_FILE ]; then
+  EXECUTE_CONF="--config-file=.php_cs" 
+else
+  EXECUTE_CONF="--level=$PHPFIXER_LEVEL_DEFAULT --diff"
+fi
+
+
+# valid file extension
+FILE_EXTENSIONS="\.(php)$"
+
+# retrive all staged files
+FILES=$(git diff-index --name-only --cached --diff-filter=ACMR HEAD -- )
+
+if [ "$FILES" == "" ]; then
+    echo "There's nothing to check"
+    exit 0
+fi
+
+# Some coloring
+CEnd=$'\e[0m'
+COrange=$'\e[39m' 
+CGreen=$'\e[36m' 
+CRed=$'\e[31m'
+CBlue=$'\e[34m'
+
+# get valid files to check
+FILES_TO_CHECK=""
+for FILE in $FILES
+do
+    echo "$FILE" | egrep -q "$FILE_EXTENSIONS"
+    RETVAL=$?
+    if [ "$RETVAL" -eq "0" ]
+    then
+        php -l -d display_errors=0 $FILE
+        if [ $? != 0 ]; then
+          echo "$Cred Fix your syntax errors before someone get hurt! $CEnd"
+          exit 2;
+        else
+          echo "$CGreen Starting to fix $FILE $CEnd"
+          FIX_RESULT=$($PHPFIXER_EXECUTABLE fix $FILE $EXECUTE_CONF )
+          echo "$FIX_RESULT" | sed -e "s/\(.*\)/$CBlue\1$CEnd/g; s/\+  /$CGreen+  /g; s/-  /$CRed-  /g;"
+          git add $FILE
+        fi
+    fi
+done
+exit 0
